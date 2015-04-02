@@ -7,9 +7,12 @@ use HTMLPurifier, HTMLPurifier_Config;
 class Client
 {
     private $guzzle;
+    private $purify;
 
-    public function __construct($base_url, $apiUser, $apiKey)
+    public function __construct($base_url, $apiUser, $apiKey, $purify = true)
     {
+        $this->setPurify($purify);
+
         // just a guzzle config
         $config = array(
             'base_url' => $base_url,
@@ -21,70 +24,64 @@ class Client
         $this->guzzle = new GuzzleClient($config);
     }
 
-    public function createContact( $attributes, $mapper = null, $verfityDropdowns = true ){
+
+    public function createContact( $submittedFields, $mapper = null, $verfityDropdowns = true, $updateId = null){
         /**
          * @todo tracking key handling
          * @todo fingerprint handling
-         * @todo may need to do htmlpurifier since x2engine does this on its own handleWebleadFormSubmission() https://laracasts.com/discuss/channels/tips/htmlpurifier-in-laravel-5 (1st comment)
-         *   https://github.com/ezyang/htmlpurifier
          */
 
-        $attributeInfo = $this->verifyAttributes('Contacts', $attributes, $verfityDropdowns = true);
+        $fieldInfo = $this->verifyAttributes('Contacts', $submittedFields, $mapper, $verfityDropdowns);
 
-        // verify we have all our needed "required" fields
-        $requiredFields = $this->getRequiredFields('Contacts');
-        foreach($requiredFields as $fieldName => $field){
-            if ( !isset($attributeInfo['verifiedFields'][$fieldName]) )
-                throw new Exception("Missing needed required field: '$fieldName'.");
+        if($updateId){
+            // update contact
+            // set dupecheck to zero
+            if(!isset($fieldInfo['verifiedFields']['dupeCheck']))
+                $fieldInfo['verifiedFields']['dupeCheck'] = 0;
+
+            // post it to x2engine
+            $res = $this->guzzle->put( 'Contacts/' . $updateId . '.json' , ['body' => json_encode($fieldInfo['verifiedFields'])] );
+        } else {
+            // create contact
+            // verify we have all our needed "required" fields
+            $requiredFields = $this->getRequiredFields('Contacts');
+            foreach($requiredFields as $fieldName => $field){
+                if ( !isset($fieldInfo['verifiedFields'][$fieldName]) )
+                    throw new Exception("Missing needed required field: '$fieldName'.");
+            }
+
+            if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
+
+            // post it to x2engine
+            $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($fieldInfo['verifiedFields'])] );
         }
 
-        // post it to x2engine
-        $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($attributeInfo['verifiedFields'])] );
         $contact = $res->json();
+
         if ( isset($contact['id']) ){
-            return array('contact' => $contact, 'ignoredFields' => $attributeInfo['ignoredFields']);
+            return array('contact' => $contact, 'ignoredFields' => $fieldInfo['ignoredFields']);
         }
 
         throw new Exception("No contact ID returned.  Something must have gone wrong.");
     }
 
-    public function updateContact($id, $attributes, $verifyDropdowns = true){
-        /**
-         * @todo tracking key handling
-         * @todo fingerprint handling
-         * @todo may need to do htmlpurifier since x2engine does this on its own handleWebleadFormSubmission() https://laracasts.com/discuss/channels/tips/htmlpurifier-in-laravel-5 (1st comment)
-         *   https://github.com/ezyang/htmlpurifier
-         */
-
-        $attributeInfo = $this->verifyAttributes('Contacts', $attributes, $verifyDropdowns);
-
-        // set dupecheck to zero
-        if(!isset($attributeInfo['verifiedFields']['dupeCheck']))
-            $attributeInfo['verifiedFields']['dupeCheck'] = 0;
-
-        // post it to x2engine
-        $res = $this->guzzle->put( 'Contacts/' . $id . '.json' , ['body' => json_encode($attributeInfo['verifiedFields'])] );
-        $contact = $res->json();
-        if ( isset($contact['id']) ){
-            return array('contact' => $contact, 'ignoredFields' => $attributeInfo['ignoredFields']);
-        }
-
-        throw new Exception("No contact ID returned.  Something must have gone wrong.");
+    public function updateContact($id, $submittedFields, $mapper = null, $verifyDropdowns = true){
+        return $this->createContact($submittedFields,$mapper,$verifyDropdowns,$id);
     }
 
     /**
      * @param $entity
-     * @param $attributes
+     * @param $submittedFields
      * @param bool $verifyDropdowns
      * @return array
      */
-    public function verifyAttributes($entity, $attributes, $verifyDropdowns = true){
+    public function verifyAttributes($entity, $submittedFields, $mapper = null, $verifyDropdowns = true){
         // get fieldnames to verify data
         $fieldNames = $this->getFields($entity, $verifyDropdowns);
         $verifiedFields = array();
         $ignoredFields = array();
 
-        foreach($attributes as $key => $value){
+        foreach($submittedFields as $key => $value){
             if(!empty($mapper) && isset($mapper[$key])){
                 // check if the mapping was correct.
                 $this->verifyGivenField($entity, $verifiedFields, $ignoredFields, $mapper[$key], $value, $fieldNames, $verifyDropdowns);
@@ -119,7 +116,8 @@ class Client
             if( $verifyDropdowns && $fieldNames[$fieldName]['type'] == 'dropdown' && !isset($fieldNames[$fieldName]['dropdownInfo']['options'][$fieldValue]) ){
                 $ignoredFields[$fieldName] = 'Not a valid dropdown value.';
             } else {
-                $fieldlist[$fieldName] = $fieldValue;
+                $fieldValue = $this->purify($fieldValue);
+                $fieldlist[$fieldName] =$fieldValue;
             }
         } else {
             $ignoredFields[$fieldName] = 'Not a valid fieldname.';
@@ -335,6 +333,56 @@ class Client
             }
         }
         return $data;
+    }
 
+    /**
+     * Should the class always purify attributes before sending to x2engine?
+     *
+     * @param bool $value
+     */
+    public function setPurify($value){
+        $this->purify = $value;
+    }
+
+    public function getPurify(){
+        return $this->purify;
+    }
+    /**
+     * The config is from x2engines getPurifier();
+     * The code is fromt the second comment here: https://laracasts.com/discuss/channels/tips/htmlpurifier-in-laravel-5
+     * Uses https://github.com/ezyang/htmlpurifier
+     *
+     * @param $string
+     * @return string
+     */
+    public function purify($string){
+        // @todo purify arrays
+        if ($this->getPurify() && is_string($string)){
+            $config = HTMLPurifier_Config::createDefault();
+            $config->loadArray([
+                'HTML.ForbiddenElements' => array(
+                    'script', // Obvious reasons (XSS)
+                    'form', // Hidden CSRF attempts?
+                    'style', // CSS injection tomfoolery
+                    'iframe', // Arbitrary location
+                    'frame', // Same reason as iframe
+                    'link', // Request to arbitrary location w/o user knowledge
+                    'video', // No,
+                    'audio', // No,
+                    'object', // Definitely no.
+                ),
+                'HTML.ForbiddenAttributes' => array(
+                    // Spoofing/mocking internal form elements:
+                    '*@id',
+                    '*@class',
+                    '*@name',
+                    // The event attributes should be removed automatically by HTMLPurifier by default
+                ),
+            ]);
+            $purifier = new HTMLPurifier($config);
+            return $purifier->purify($string);
+        }
+
+        return $string;
     }
 }
