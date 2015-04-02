@@ -8,6 +8,7 @@
         }
     ],
     "minimum-stability": "dev",
+    "prefer-stable": true,
     "require": {
         "guzzle/guzzle": "3.9.3",
         "ezyang/htmlpurifier": "dev-master"
