@@ -1,7 +1,8 @@
 <?php namespace Oca\X2RestClient;
 
-use Exception; // from laravel
+use Exception;
 use GuzzleHttp\Client as GuzzleClient;
+use HTMLPurifier, HTMLPurifier_Config;
 
 class Client
 {
@@ -13,59 +14,119 @@ class Client
         $config = array(
             'base_url' => $base_url,
             'defaults' => [
-                'headers'  => ['Content-Type' => 'application/json'],
-                'auth' =>  [ $apiUser, $apiKey ],
+                'headers' => ['Content-Type' => 'application/json'],
+                'auth' => [$apiUser, $apiKey],
             ],
         );
         $this->guzzle = new GuzzleClient($config);
     }
 
-    public function createContact( $attributes, $mapper = null ){
-        //@todo may need to do htmlpurifier since x2engine does this on webform submits https://laracasts.com/discuss/channels/tips/htmlpurifier-in-laravel-5 (1st comment)
-        //   https://github.com/ezyang/htmlpurifier
-        //@todo update contact if duplicate found
-        $contactInfo = array();
-        // get fieldnames to verify data
-        $fieldNames = $this->getFieldNames('Contacts');
-        if($mapper){
-            foreach($attributes as $key=>$value){
-                if(isset($mapper[$key])){
-                    // check if the mapping was correct.
-                    if(isset($fieldNames[$mapper[$key]])){
-                        $contactInfo{$mapper[$key]}=$value; // Found in field map, used mapped attribute
-                    } else {
-                        throw new Exception($mapper[$key] . ' field mapped in with an invalid fieldName.'); //@todo, we should probably just log the error... not throw an exception
-                    }
-                }else{
-                    $contactInfo[$key]=$value; // No match anywhere, assume it's a Contact attribute @todo should we do this???
-                }
-            }
-        // we are going to assume the field names are the same as in x2 so no mapping is needed... but we'll check below.
-        } else {
-            foreach($attributes as $key=>$value){
-                // check if the mapping was correct.
-                if(isset($fieldNames[$key])){
-                    $contactInfo[$key]=$value; // Found in field map, used mapped attribute
-                } else {
-                    throw new Exception($key . ' field mapped in with an invalid fieldName.'); //@todo, we should probably just log the error and ignore... not throw an exception
-                }
-            }
-        }
-
-        $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($contactInfo)] );
-        $contact = $res->json();
-        if ( isset($contact['id']) ){
-            return $contact;
-        }
-        //throw new Exception($key . ' field mapped in with an invalid fieldName.'); @todo need some kind of error if ID does not exist.
-
-        return '$res'; //@todo create verification method, return res->json().
-
+    public function createContact( $attributes, $mapper = null, $verfityDropdowns = true ){
         /**
          * @todo tracking key handling
          * @todo fingerprint handling
+         * @todo may need to do htmlpurifier since x2engine does this on its own handleWebleadFormSubmission() https://laracasts.com/discuss/channels/tips/htmlpurifier-in-laravel-5 (1st comment)
+         *   https://github.com/ezyang/htmlpurifier
          */
+
+        $attributeInfo = $this->verifyAttributes('Contacts', $attributes, $verfityDropdowns = true);
+
+        // verify we have all our needed "required" fields
+        $requiredFields = $this->getRequiredFields('Contacts');
+        foreach($requiredFields as $fieldName => $field){
+            if ( !isset($attributeInfo['verifiedFields'][$fieldName]) )
+                throw new Exception("Missing needed required field: '$fieldName'.");
+        }
+
+        // post it to x2engine
+        $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($attributeInfo['verifiedFields'])] );
+        $contact = $res->json();
+        if ( isset($contact['id']) ){
+            return array('contact' => $contact, 'ignoredFields' => $attributeInfo['ignoredFields']);
+        }
+
+        throw new Exception("No contact ID returned.  Something must have gone wrong.");
     }
+
+    public function updateContact($id, $attributes, $verifyDropdowns = true){
+        /**
+         * @todo tracking key handling
+         * @todo fingerprint handling
+         * @todo may need to do htmlpurifier since x2engine does this on its own handleWebleadFormSubmission() https://laracasts.com/discuss/channels/tips/htmlpurifier-in-laravel-5 (1st comment)
+         *   https://github.com/ezyang/htmlpurifier
+         */
+
+        $attributeInfo = $this->verifyAttributes('Contacts', $attributes, $verifyDropdowns);
+
+        // set dupecheck to zero
+        if(!isset($attributeInfo['verifiedFields']['dupeCheck']))
+            $attributeInfo['verifiedFields']['dupeCheck'] = 0;
+
+        // post it to x2engine
+        $res = $this->guzzle->put( 'Contacts/' . $id . '.json' , ['body' => json_encode($attributeInfo['verifiedFields'])] );
+        $contact = $res->json();
+        if ( isset($contact['id']) ){
+            return array('contact' => $contact, 'ignoredFields' => $attributeInfo['ignoredFields']);
+        }
+
+        throw new Exception("No contact ID returned.  Something must have gone wrong.");
+    }
+
+    /**
+     * @param $entity
+     * @param $attributes
+     * @param bool $verifyDropdowns
+     * @return array
+     */
+    public function verifyAttributes($entity, $attributes, $verifyDropdowns = true){
+        // get fieldnames to verify data
+        $fieldNames = $this->getFields($entity, $verifyDropdowns);
+        $verifiedFields = array();
+        $ignoredFields = array();
+
+        foreach($attributes as $key => $value){
+            if(!empty($mapper) && isset($mapper[$key])){
+                // check if the mapping was correct.
+                $this->verifyGivenField($entity, $verifiedFields, $ignoredFields, $mapper[$key], $value, $fieldNames, $verifyDropdowns);
+            }else{
+                // No match in mapper, or mapper not provided assume it's a Contact attribute
+                $this->verifyGivenField($entity, $verifiedFields, $ignoredFields, $key, $value, $fieldNames, $verifyDropdowns);
+            }
+        }
+
+        return array(
+            'verifiedFields' => $verifiedFields,
+            'ignoredFields' => $ignoredFields,
+            'fieldNames' => $fieldNames,
+        );
+    }
+
+    /**
+     * @param $fieldlist
+     * @param $ignoredFields
+     * @param $fieldName
+     * @param $fieldValue
+     * @param null $fieldNames
+     * @param bool $verifyDropdowns, For this to work you must make sure $fieldNames includes dropdowns ( see getFields() )
+     */
+    public function verifyGivenField($entity, &$fieldlist, &$ignoredFields, $fieldName, $fieldValue, $fieldNames = null, $verifyDropdowns = false){
+        if(empty($fieldNames)){
+            $fieldNames = $this->getFields($entity, $verifyDropdowns);
+        }
+        // check if the mapping was correct.
+        if(isset($fieldNames[$fieldName])){
+            // verify the dropdown
+            if( $verifyDropdowns && $fieldNames[$fieldName]['type'] == 'dropdown' && !isset($fieldNames[$fieldName]['dropdownInfo']['options'][$fieldValue]) ){
+                $ignoredFields[$fieldName] = 'Not a valid dropdown value.';
+            } else {
+                $fieldlist[$fieldName] = $fieldValue;
+            }
+        } else {
+            $ignoredFields[$fieldName] = 'Not a valid fieldname.';
+//            throw new Exception($fieldName . ' is an invalid fieldName.');
+        }
+    }
+
 
     /**
      * Returns an array of contact's attributes given an email
@@ -123,8 +184,9 @@ class Client
     /**
      * @param string $entity string
      * @param array|string $email
-     * @param string $field
+     * @param string $fieldName
      * @return mixed|null
+     * @internal param string $field
      */
     public function getEntityByEmailField($entity, $email, $fieldName = 'email'){
         // limit to 500, probably never have 500 contacts when checking for duplicates... so if we receive 500, we know something is wrong
@@ -165,10 +227,44 @@ class Client
         return $flat;
     }
 
-    public function getDropdown($fieldIdentifier){
-        if(is_integer($fieldIdentifier)){
+    public function resetAllDupeCheck($entity, $list){
+        if(!is_array($list))
+            throw new Exception('$list should be an array');
 
+        foreach($list as $item){
+            if(!isset($item['id']))
+                throw new Exception('$list items should contain an ID.');
+
+            $this->resetDupeCheck($entity,$item['id']);
         }
+    }
+
+    public function resetDupeCheck($entity, $id){
+        $config = array(
+            'dupeCheck' => 0,
+        );
+        $res = $this->guzzle->put("$entity/$id.json", ['body' => json_encode($config)]);
+        return $res->json();
+    }
+
+    public function getAllDropdowns($byId = true){
+        $res = $this->guzzle->get('dropdowns');
+
+        // return them with the dropdown ID as key in the array
+        if($byId){
+            $dropdowns = array();
+            foreach($res->json() as $dropdown){
+                $dropdowns[$dropdown['id']] = $dropdown;
+            }
+            return $dropdowns;
+        }
+
+        return $res->json();
+    }
+
+    public function getDropdown($fieldId){
+        $res = $this->guzzle->get("dropdowns/$fieldId.json");
+        return $res->json();
     }
 
     public function getEmailFields($entity){
@@ -219,18 +315,26 @@ class Client
         return null;
     }
 
-    public function getFields($entity){
+    /**
+     * @param $entity, entity type.
+     * @param bool $withDropdownOptions, this will include the dropdown info per dropdown field.
+     * @return array
+     */
+    public function getFields($entity, $withDropdownOptions = false){
         $res = $this->guzzle->get("$entity/fields");
-        return $res->json();
-    }
 
-    public function getFieldNames($entity)
-    {
-        $fields = $this->getFields($entity);
         $data = array();
-        foreach ($fields as $field) {
-            $data[$field['fieldName']] = array('fieldName' => $field['fieldName'], 'attributeLabel' => $field['attributeLabel']);
+        if($withDropdownOptions){
+            $dropdowns = $this->getAllDropdowns();
+        }
+
+        foreach ($res->json() as $field) {
+            $data[$field['fieldName']] = $field;
+            if($withDropdownOptions && $field['type'] == 'dropdown' && isset($dropdowns[$field['linkType']])){
+                $data[$field['fieldName']]['dropdownInfo'] = $dropdowns[$field['linkType']];
+            }
         }
         return $data;
+
     }
 }
