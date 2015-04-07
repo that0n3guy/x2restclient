@@ -39,18 +39,23 @@ class Client
             if(!isset($fieldInfo['verifiedFields']['dupeCheck']))
                 $fieldInfo['verifiedFields']['dupeCheck'] = 0;
 
+            //Set visibility
+            if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
+
             // post it to x2engine
             $res = $this->guzzle->put( 'Contacts/' . $updateId . '.json' , ['body' => json_encode($fieldInfo['verifiedFields'])] );
         } else {
             // create contact
+
+            //Set visibility
+            if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
+
             // verify we have all our needed "required" fields
             $requiredFields = $this->getRequiredFields('Contacts');
             foreach($requiredFields as $fieldName => $field){
                 if ( !isset($fieldInfo['verifiedFields'][$fieldName]) )
                     throw new Exception("Missing needed required field: '$fieldName'.");
             }
-
-            if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
 
             // post it to x2engine
             $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($fieldInfo['verifiedFields'])] );
@@ -139,9 +144,9 @@ class Client
         if(is_array($emails)){
             $contacts = array();
             foreach ($emailFields as $field) {
-                $contactList = $this->getEntityByEmailField('Contacts', $emails, $field['fieldName']);
+                $contactList = $this->getEntityByField('Contacts', $emails, $field['fieldName']);
                 if($contactList){ // if null... do nothing
-                    $contacts[$field['fieldName']] = $contactList;
+                    $contacts[$field['fieldName']] = $this->flattenEntityList(array($contactList)); // use this function to get the contact list with ID's for keys
                 }
             }
 
@@ -179,16 +184,33 @@ class Client
         }
     }
 
+    public function getContactsByName($names){
+        $nameField = 'name'; // default x2engine name field
+        if(is_array($names)){
+            $contacts = array();
+            return $this->getEntityByField('Contacts', $names, 'name');
+        } else {
+            throw new Exception('$names should be an array');
+        }
+    }
+
     /**
      * @param string $entity string
-     * @param array|string $email
+     * @param array|string $searchInfo
      * @param string $fieldName
+     * @param int $visibility
      * @return mixed|null
+     * @internal param array|string $email
      * @internal param string $field
      */
-    public function getEntityByEmailField($entity, $email, $fieldName = 'email'){
+    public function getEntityByField($entity, $searchInfo, $fieldName = 'email', $visibility = 1){
         // limit to 500, probably never have 500 contacts when checking for duplicates... so if we receive 500, we know something is wrong
-        $query = array('_limit' => 500, $fieldName => $email);
+        $query = array('_limit' => 500, $fieldName => $searchInfo);
+
+        // some entities don't support visibility... so allow it to not be set.
+        if($this->notEmpty($visibility)){
+            $query['visibility'] = $visibility;
+        }
         $query = http_build_query($query);
         $res = $this->guzzle->get("$entity?$query");
         $contacts = $res->json();
@@ -206,7 +228,7 @@ class Client
      * @param $list, a list of lists.  something like [0=>[0=>[firstname, lastname,etc],1=>[firstname,lastname,etc]],1=>....]
      * @return array|null, returns a
      */
-    public function flattenEntityList($list, $idkeys = false){
+    public function flattenEntityList($list, $idkeys = true){
         if(!is_array($list)){
             return null;
         }
@@ -384,5 +406,15 @@ class Client
         }
 
         return $string;
+    }
+
+    /**
+     * Helper function from http://stackoverflow.com/a/733175
+     *
+     * @param $var
+     * @return bool
+     */
+    public function notEmpty($var) {
+        return ($var==="0"||$var);
     }
 }
