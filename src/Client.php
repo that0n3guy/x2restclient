@@ -51,11 +51,7 @@ class Client
             if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
 
             // verify we have all our needed "required" fields
-            $requiredFields = $this->getRequiredFields('Contacts');
-            foreach($requiredFields as $fieldName => $field){
-                if ( !isset($fieldInfo['verifiedFields'][$fieldName]) )
-                    throw new Exception("Missing needed required field: '$fieldName'.");
-            }
+            $this->validateFields('Contacts', $fieldInfo['verifiedFields']);
 
             // post it to x2engine
             $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($fieldInfo['verifiedFields'])] );
@@ -72,6 +68,54 @@ class Client
 
     public function updateContact($id, $submittedFields, $mapper = null, $verifyDropdowns = true){
         return $this->createContact($submittedFields,$mapper,$verifyDropdowns,$id);
+    }
+
+    public function validateFields($entity, $fields){
+        // verify we have all our needed "required" fields
+        $requiredFields = $this->getRequiredFields($entity);
+        foreach($requiredFields as $fieldName => $field){
+            if ( !isset($fields[$fieldName]) )
+                throw new Exception("Missing needed required field: '$fieldName'.");
+        }
+    }
+
+    public function getActions($contactId, $byId = true){
+        $res = $this->guzzle->get("Contacts/$contactId/Actions");
+
+        // return them with the dropdown ID as key in the array
+        if($byId){
+            $actions = array();
+            foreach($res->json() as $action){
+                $actions[$action['id']] = $action;
+            }
+            return $actions;
+        }
+
+        return $res->json();
+    }
+
+    public function createWebformAction($contactId, $webformData){
+        $actionDescription = "Webform Submission:\r\n\r\n";
+        foreach($webformData as $key => $value){
+            if(!empty($value)){
+                $pvalue = $this->purify($value);
+                $actionDescription .= "$key: $pvalue\r\n";
+            }
+        }
+
+        $actionData = array(
+            'actionDescription' => $actionDescription,
+            'associationId' => $contactId,
+            'associationType' => 'Contacts',
+            'type' => 'note',
+            "visibility" => "1",
+        );
+
+        //$this->validateFields('Actions', $actionData);
+
+        $res = $this->guzzle->post( "Contacts/$contactId/Actions", ['body' => json_encode($actionData)] );
+
+        return $res->json();
     }
 
     /**
