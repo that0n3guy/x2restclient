@@ -79,11 +79,11 @@ class Client
         }
     }
 
-    public function getActions($contactId, $byId = true){
-        $res = $this->guzzle->get("Contacts/$contactId/Actions");
+    public function getEntityActions($entity, $Id, $sortById = true){
+        $res = $this->guzzle->get("$entity/$Id/Actions");
 
-        // return them with the dropdown ID as key in the array
-        if($byId){
+        // return them with the action ID as key in the array
+        if($sortById){
             $actions = array();
             foreach($res->json() as $action){
                 $actions[$action['id']] = $action;
@@ -94,27 +94,37 @@ class Client
         return $res->json();
     }
 
-    public function createWebformAction($contactId, $webformData){
-        $actionDescription = "Webform Submission:\r\n\r\n";
-        foreach($webformData as $key => $value){
-            if(!empty($value)){
-                $pvalue = $this->purify($value);
-                $actionDescription .= "$key: $pvalue\r\n";
-            }
-        }
-
+    public function createAction($entity, $entityId, $description, $type = 'note'){
         $actionData = array(
-            'actionDescription' => $actionDescription,
-            'associationId' => $contactId,
-            'associationType' => 'Contacts',
-            'type' => 'note',
+            'actionDescription' => $description,
+            'associationId' => $entityId,
+            'associationType' => $entity,
+            'type' => $type,
             "visibility" => "1",
         );
 
         //$this->validateFields('Actions', $actionData);
 
-        $res = $this->guzzle->post( "Contacts/$contactId/Actions", ['body' => json_encode($actionData)] );
+        $res = $this->guzzle->post( "$entity/$entityId/Actions", ['body' => json_encode($actionData)] );
 
+        return $res->json();
+    }
+
+
+    public function getEntityTags($entity, $Id){
+        $res = $this->guzzle->get("$entity/$Id/tags");
+
+        return $res->json();
+    }
+
+    public function createTags($entity, $Id, $tagList){
+        $res = $this->guzzle->post("$entity/$Id/tags", ['body' => json_encode($tagList)] );
+
+        return $res->json();
+    }
+
+    public function getEntity($entity, $entityId){
+        $res = $this->guzzle->get( "$entity/$entityId.json" );
         return $res->json();
     }
 
