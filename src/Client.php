@@ -118,8 +118,12 @@ class Client
     }
 
     public function createTags($entity, $Id, $tagList){
-        $res = $this->guzzle->post("$entity/$Id/tags", ['body' => json_encode($tagList)] );
+        $hashedTags = array();
+        foreach ($tagList as $tag) {
+            $hashedTags[] = '#'.ltrim(trim($tag), '#'); // Auto-prepend "#" if missing;
+        }
 
+        $res = $this->guzzle->post("$entity/$Id/tags", ['body' => json_encode($hashedTags)] );
         return $res->json();
     }
 
