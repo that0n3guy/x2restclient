@@ -188,6 +188,46 @@ class Client
         }
     }
 
+    /**
+     * @param array $emails, simple array of emails
+     * @param array $otherEmailFields, array of fields that may have email addresses in them
+     * @return null
+     * @throws Exception
+     */
+    function getEmailduplicates($emails, $emailFields = array('email')){
+        $updateContact = null;
+        $otherContacts = array();
+
+        if(empty($emails)){
+            return null;
+        }
+
+        $emailDuplicates = $this->getContactsByEmails($emails, false);
+        if(empty($emailDuplicates)){
+            return null;
+        }
+
+        // process email fields - Usually you set "email" first so it is checked first.
+        //  - if multiples for that email field, use the highest ID for that field
+        foreach ($emailFields as $fieldname){
+            $other = null;
+
+            if(isset($emailDuplicates[$fieldname])){
+                $others = $emailDuplicates[$fieldname];
+
+                if(empty($updateContact)){ // if this is NOT set by $primary... set it.
+                    // get the highest ID (see max()) if there are multiple contacts from $fieldname
+                    $updateContact = $emailDuplicates[$fieldname][ max(array_keys($emailDuplicates[$fieldname])) ];
+
+                    unset($others[$updateContact['id']]);  // unset $updateContact as its no longer an "other"
+                }
+                if(!empty($others))
+                    $otherContacts[$fieldname] = $others;
+            }
+        }
+
+        return array('contactToUpdate' => $updateContact, 'otherContacts' => $otherContacts);
+    }
 
     /**
      * Returns an array of contact's attributes given an email
@@ -197,12 +237,12 @@ class Client
      * @return array|null
      * @throws Exception
      */
-    public function getContactsByEmails($emails, $flatten = true, $dedup = true){
+    public function getContactsByEmails($emails, $flatten = true, $dedup = true, $visibility = 1){
         $emailFields = $this->getEmailFields('Contacts');
         if(is_array($emails)){
             $contacts = array();
             foreach ($emailFields as $field) {
-                $contactList = $this->getEntityByField('Contacts', $emails, $field['fieldName']);
+                $contactList = $this->getEntityByField('Contacts', $emails, $field['fieldName'], $visibility);
                 if($contactList){ // if null... do nothing
                     $contacts[$field['fieldName']] = $this->flattenEntityList(array($contactList)); // use this function to get the contact list with ID's for keys
                 }
@@ -305,6 +345,11 @@ class Client
         return $flat;
     }
 
+    /**
+     * @param string $entity, example: "Contacts"
+     * @param array $list, an array of Contacts
+     * @throws Exception
+     */
     public function resetAllDupeCheck($entity, $list){
         if(!is_array($list))
             throw new Exception('$list should be an array');
