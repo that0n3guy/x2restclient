@@ -165,6 +165,10 @@ class Client
             }
         }
 
+        // visibility is a required field not often set... lets set it.
+        if (empty ($verifiedFields['visibility']))
+            $verifiedFields['visibility'] = 1;
+
         $missingRequired = $this->validateRequiredFields($entity,$verifiedFields);
 
         return array(
@@ -176,14 +180,14 @@ class Client
     }
 
     /**
-     * @param $fieldlist
+     * @param $verifiedFields
      * @param $ignoredFields
      * @param $fieldName
      * @param $fieldValue
      * @param null $fieldNames
      * @param bool $verifyDropdowns, For this to work you must make sure $fieldNames includes dropdowns ( see getFields() )
      */
-    public function verifyGivenField($entity, &$fieldlist, &$ignoredFields, $fieldName, $fieldValue, $fieldNames = null, $verifyDropdowns = false){
+    public function verifyGivenField($entity, &$verifiedFields, &$ignoredFields, $fieldName, $fieldValue, $fieldNames = null, $verifyDropdowns = false){
         if(empty($fieldNames)){
             $fieldNames = $this->getFields($entity, $verifyDropdowns);
         }
@@ -194,7 +198,7 @@ class Client
                 $ignoredFields[$fieldName] = 'Not a valid dropdown value.';
             } else {
                 $fieldValue = $this->purify($fieldValue);
-                $fieldlist[$fieldName] =$fieldValue;
+                $verifiedFields[$fieldName] =$fieldValue;
             }
         } else {
             $ignoredFields[$fieldName] = 'Not a valid fieldname.';
