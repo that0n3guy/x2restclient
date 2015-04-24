@@ -50,8 +50,10 @@ class Client
             //Set visibility
             if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
 
-            // verify we have all our needed "required" fields
-            $this->validateFields('Contacts', $fieldInfo['verifiedFields']);
+            // verify we have all our needed "required" fields... Not needed if updating (probably)
+            if(isset($fieldInfo['missingRequired']) && !empty($fieldInfo['missingRequired'])){
+                return array('missingRequired' => $fieldInfo['missingRequired']);
+            }
 
             // post it to x2engine
             $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($fieldInfo['verifiedFields'])] );
@@ -70,13 +72,19 @@ class Client
         return $this->createContact($submittedFields,$mapper,$verifyDropdowns,$id);
     }
 
-    public function validateFields($entity, $fields){
+    public function validateRequiredFields($entity, $fields){
         // verify we have all our needed "required" fields
         $requiredFields = $this->getRequiredFields($entity);
+        $missingRequired = array();
         foreach($requiredFields as $fieldName => $field){
             if ( !isset($fields[$fieldName]) )
-                throw new Exception("Missing needed required field: '$fieldName'.");
+                $missingRequired[$fieldName] = "Missing needed required field: $fieldName.";
         }
+
+        if(empty($missingRequired))
+            return null;
+
+        return $missingRequired;
     }
 
     public function getEntityActions($entity, $Id, $sortById = true){
@@ -102,8 +110,6 @@ class Client
             'type' => $type,
             "visibility" => "1",
         );
-
-        //$this->validateFields('Actions', $actionData);
 
         $res = $this->guzzle->post( "$entity/$entityId/Actions", ['body' => json_encode($actionData)] );
 
@@ -133,6 +139,11 @@ class Client
     }
 
     /**
+     * Checks the given fields against the given entity type's fields.  Returns fields that are verified and ignored.
+     *  Also returns a list of the field names for the entity.
+     *
+     * You can provide a mapper as well if your field names aren't the same as the entities field names.
+     *
      * @param $entity
      * @param $submittedFields
      * @param bool $verifyDropdowns
@@ -154,10 +165,13 @@ class Client
             }
         }
 
+        $missingRequired = $this->validateRequiredFields($entity,$verifiedFields);
+
         return array(
             'verifiedFields' => $verifiedFields,
             'ignoredFields' => $ignoredFields,
             'fieldNames' => $fieldNames,
+            'missingRequired' => $missingRequired,
         );
     }
 
