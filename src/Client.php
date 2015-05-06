@@ -109,6 +109,7 @@ class Client
             'associationType' => $entity,
             'type' => $type,
             "visibility" => "1",
+            "createDate" => time(),
         );
 
         $res = $this->guzzle->post( "$entity/$entityId/Actions", ['body' => json_encode($actionData)] );
@@ -320,6 +321,14 @@ class Client
      * @internal param string $field
      */
     public function getEntityByField($entity, $searchInfo, $fieldName = 'email', $visibility = 1){
+        //remove all empty items
+        $searchInfo = array_filter($searchInfo);
+
+        // if empty, return null
+        if(empty($searchInfo)){
+            return null;
+        }
+
         // limit to 500, probably never have 500 contacts when checking for duplicates... so if we receive 500, we know something is wrong
         $query = array('_limit' => 500, $fieldName => $searchInfo);
 
