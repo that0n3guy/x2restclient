@@ -10,7 +10,7 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "require": {
-        "guzzle/guzzle": "3.9.3",
+        "guzzlehttp/guzzle": "~5.0",
         "ezyang/htmlpurifier": "dev-master"
     },
     "autoload": {
