@@ -2,12 +2,6 @@ Your projects composer file will probably need the following 2 lines for this to
 
 ```
     {
-      "repositories": [
-        {
-          "type": "git",
-          "url": "/vagrant/repos/x2restclient"
-        }
-      ],
       "minimum-stability": "dev",
       "prefer-stable": true,
       "require": {
