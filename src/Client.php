@@ -9,6 +9,13 @@ class Client
     private $guzzle;
     private $purify;
 
+    /**
+     * Client constructor.
+     * @param $base_url
+     * @param $apiUser
+     * @param $apiKey
+     * @param bool|true $purify
+     */
     public function __construct($base_url, $apiUser, $apiKey, $purify = true)
     {
         $this->setPurify($purify);
@@ -24,7 +31,17 @@ class Client
         $this->guzzle = new GuzzleClient($config);
     }
 
-
+    /**
+     * Create a contact. Return the contact with infomration on ignored fields, or return information on what information
+     * is missing.
+     *
+     * @param $submittedFields
+     * @param null $mapper
+     * @param bool|true $verfityDropdowns
+     * @param null $updateId
+     * @return array
+     * @throws Exception
+     */
     public function createContact( $submittedFields, $mapper = null, $verfityDropdowns = true, $updateId = null){
         /**
          * @todo tracking key handling
@@ -68,10 +85,27 @@ class Client
         throw new Exception("No contact ID returned.  Something must have gone wrong.");
     }
 
+    /**
+     * Update a Contact.
+     *
+     * @param $id
+     * @param $submittedFields
+     * @param null $mapper
+     * @param bool|true $verifyDropdowns
+     * @return array
+     * @throws Exception
+     */
     public function updateContact($id, $submittedFields, $mapper = null, $verifyDropdowns = true){
         return $this->createContact($submittedFields,$mapper,$verifyDropdowns,$id);
     }
 
+    /**
+     * Validate that the fields passed include all required fields. Retrieves required fields by the entity type.
+     *
+     * @param $entity
+     * @param $fields
+     * @return array|null
+     */
     public function validateRequiredFields($entity, $fields){
         // verify we have all our needed "required" fields
         $requiredFields = $this->getRequiredFields($entity);
@@ -87,6 +121,13 @@ class Client
         return $missingRequired;
     }
 
+    /**
+     * Get any actions available via the entity type.
+     * @param $entity
+     * @param $Id
+     * @param bool|true $sortById
+     * @return array
+     */
     public function getEntityActions($entity, $Id, $sortById = true){
         $res = $this->guzzle->get("$entity/$Id/Actions");
 
@@ -102,6 +143,15 @@ class Client
         return $res->json();
     }
 
+    /**
+     * Create an action for an entity.
+     *
+     * @param $entity
+     * @param $entityId
+     * @param $description
+     * @param string $type
+     * @return mixed
+     */
     public function createAction($entity, $entityId, $description, $type = 'note'){
         $actionData = array(
             'actionDescription' => $description,
@@ -117,13 +167,27 @@ class Client
         return $res->json();
     }
 
-
+    /**
+     * Get the tags for an entity (contact, etc) based on it's ID
+     *
+     * @param $entity
+     * @param $Id
+     * @return mixed|JSON
+     */
     public function getEntityTags($entity, $Id){
         $res = $this->guzzle->get("$entity/$Id/tags");
 
         return $res->json();
     }
 
+    /**
+     * Create a tag for an entity, based on it's ID
+     *
+     * @param $entity
+     * @param $Id
+     * @param $tagList
+     * @return mixed
+     */
     public function createTags($entity, $Id, $tagList){
         $hashedTags = array();
         foreach ($tagList as $tag) {
@@ -134,6 +198,11 @@ class Client
         return $res->json();
     }
 
+    /**
+     * @param $entity
+     * @param $entityId
+     * @return mixed
+     */
     public function getEntity($entity, $entityId){
         $res = $this->guzzle->get( "$entity/$entityId.json" );
         return $res->json();
@@ -181,6 +250,8 @@ class Client
     }
 
     /**
+     * Verifies a field. Can check if the field is a correct dropdown value, and if it's a valid field name.
+     *
      * @param $verifiedFields
      * @param $ignoredFields
      * @param $fieldName
@@ -272,7 +343,7 @@ class Client
                 foreach($contacts as $fname => $clists){
                     foreach($clists as $key => $contact){
                         if( isset($dedup[$contact['id']]) ){
-                           unset($contacts[$fname][$key]);
+                            unset($contacts[$fname][$key]);
                         }
                         $dedup[$contact['id']] = 1;
                     }
@@ -301,10 +372,14 @@ class Client
         }
     }
 
+    /**
+     * Finds a contact in X2 using their name.  Should be "FirstName LastName"
+     * @param $names
+     * @return mixed|null
+     * @throws Exception
+     */
     public function getContactsByName($names){
-        $nameField = 'name'; // default x2engine name field
         if(is_array($names)){
-            $contacts = array();
             return $this->getEntityByField('Contacts', $names, 'name');
         } else {
             throw new Exception('$names should be an array');
@@ -312,8 +387,10 @@ class Client
     }
 
     /**
-     * @param string $entity string
-     * @param array|string $searchInfo
+     * Gets an entity (contact, etc) by user specified field type.
+     *
+     * @param string $entity string, the type of record you are retrieving
+     * @param array|string $searchInfo, the values you are searching with
      * @param string $fieldName
      * @param int $visibility
      * @return mixed|null
@@ -389,6 +466,11 @@ class Client
         }
     }
 
+    /**
+     * @param $entity
+     * @param $id
+     * @return mixed
+     */
     public function resetDupeCheck($entity, $id){
         $config = array(
             'dupeCheck' => 0,
@@ -397,6 +479,10 @@ class Client
         return $res->json();
     }
 
+    /**
+     * @param bool|true $byId
+     * @return array
+     */
     public function getAllDropdowns($byId = true){
         $res = $this->guzzle->get('dropdowns');
 
@@ -412,11 +498,19 @@ class Client
         return $res->json();
     }
 
+    /**
+     * @param $fieldId
+     * @return mixed
+     */
     public function getDropdown($fieldId){
         $res = $this->guzzle->get("dropdowns/$fieldId.json");
         return $res->json();
     }
 
+    /**
+     * @param $entity
+     * @return array
+     */
     public function getEmailFields($entity){
         $fields = $this->getFields($entity);
         $emailFields = array();
@@ -437,6 +531,10 @@ class Client
         return $emailFields;
     }
 
+    /**
+     * @param $entity
+     * @return array
+     */
     public function getRequiredFields($entity){
         $fields = $this->getFields($entity);
         $emailFields = array();
@@ -449,6 +547,7 @@ class Client
 
         return $emailFields;
     }
+
     /**
      * @param $entity, type of entity (Contacts, Accounts, etc...)
      * @param $name, name of the field
@@ -496,9 +595,15 @@ class Client
         $this->purify = $value;
     }
 
+    /**
+     * return the value for whether or not attributes should be purified before sending to X2
+     *
+     * @return mixed
+     */
     public function getPurify(){
         return $this->purify;
     }
+
     /**
      * The config is from x2engines getPurifier();
      * The code is fromt the second comment here: https://laracasts.com/discuss/channels/tips/htmlpurifier-in-laravel-5
