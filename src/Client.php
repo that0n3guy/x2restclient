@@ -18,10 +18,10 @@ class Client
 
         // just a guzzle config
         $config = array(
-            'base_url' => $base_url,
+            'base_uri' => $base_url,
         );
-        $this->auth = [$apiUser, $apiKey];
-        $this->defaultHeaders = ['Content-Type' => 'application/json'];
+        $this->auth = ['auth' => [$apiUser, $apiKey]];
+        $this->defaultHeaders = ['headers' => ['Content-Type' => 'application/json']];
         // @todo make auth, defaultHeadres, defaultRequest set with get/setAuth so its extendable.
         $this->defaultRequest = array_merge($this->auth, $this->defaultHeaders);
         $this->guzzle = new GuzzleClient($config);
@@ -91,7 +91,7 @@ class Client
     }
 
     public function getEntityActions($entity, $Id, $sortById = true){
-        $res = $this->guzzle->get("$entity/$Id/Actions");
+        $res = $this->guzzle->get("$entity/$Id/Actions", $this->defaultRequest);
 
         // return them with the action ID as key in the array
         if($sortById){
@@ -115,14 +115,14 @@ class Client
             "createDate" => time(),
         );
 
-        $res = $this->guzzle->post( "$entity/$entityId/Actions", ['body' => json_encode($actionData)] );
+        $res = $this->guzzle->post( "$entity/$entityId/Actions", array_merge(['body' => json_encode($actionData)], $this->defaultRequest) );
 
         return $res->json();
     }
 
 
     public function getEntityTags($entity, $Id){
-        $res = $this->guzzle->get("$entity/$Id/tags");
+        $res = $this->guzzle->get("$entity/$Id/tags", $this->defaultRequest);
 
         return $res->json();
     }
@@ -133,12 +133,12 @@ class Client
             $hashedTags[] = '#'.ltrim(trim($tag), '#'); // Auto-prepend "#" if missing;
         }
 
-        $res = $this->guzzle->post("$entity/$Id/tags", ['body' => json_encode($hashedTags)] );
+        $res = $this->guzzle->post("$entity/$Id/tags", array_merge(['body' => json_encode($hashedTags)], $this->defaultRequest) );
         return $res->json();
     }
 
     public function getEntity($entity, $entityId){
-        $res = $this->guzzle->get( "$entity/$entityId.json" );
+        $res = $this->guzzle->get( "$entity/$entityId.json", $this->defaultRequest);
         return $res->json();
     }
 
@@ -275,7 +275,7 @@ class Client
                 foreach($contacts as $fname => $clists){
                     foreach($clists as $key => $contact){
                         if( isset($dedup[$contact['id']]) ){
-                           unset($contacts[$fname][$key]);
+                            unset($contacts[$fname][$key]);
                         }
                         $dedup[$contact['id']] = 1;
                     }
@@ -340,7 +340,7 @@ class Client
             $query['visibility'] = $visibility;
         }
         $query = http_build_query($query);
-        $res = $this->guzzle->get("$entity?$query");
+        $res = $this->guzzle->get("$entity?$query", $this->defaultRequest);
         $contacts = $res->json();
         if (count($contacts) == 500 ) {
             return null; // something must have gone wrong.
@@ -396,12 +396,12 @@ class Client
         $config = array(
             'dupeCheck' => 0,
         );
-        $res = $this->guzzle->put("$entity/$id.json", ['body' => json_encode($config)]);
+        $res = $this->guzzle->put("$entity/$id.json", array_merge(['body' => json_encode($config)], $this->defaultRequest));
         return $res->json();
     }
 
     public function getAllDropdowns($byId = true){
-        $res = $this->guzzle->get('dropdowns');
+        $res = $this->guzzle->get('dropdowns', $this->defaultRequest, $this->defaultRequest);
 
         // return them with the dropdown ID as key in the array
         if($byId){
@@ -416,7 +416,7 @@ class Client
     }
 
     public function getDropdown($fieldId){
-        $res = $this->guzzle->get("dropdowns/$fieldId.json");
+        $res = $this->guzzle->get("dropdowns/$fieldId.json", $this->defaultRequest);
         return $res->json();
     }
 
@@ -474,7 +474,7 @@ class Client
      * @return array
      */
     public function getFields($entity, $withDropdownOptions = false){
-        $res = $this->guzzle->get("$entity/fields");
+        $res = $this->guzzle->get("$entity/fields", $this->defaultRequest);
 
         $data = array();
         if($withDropdownOptions){
