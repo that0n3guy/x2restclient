@@ -62,7 +62,7 @@ class Client
             $res = $this->guzzle->post( 'Contacts', array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
         }
 
-        $contact = $this->getReqJson($res);
+        $contact = $this->getRespJson($res);
 
         if ( isset($contact['id']) ){
             return array('contact' => $contact, 'ignoredFields' => $fieldInfo['ignoredFields']);
@@ -96,13 +96,13 @@ class Client
         // return them with the action ID as key in the array
         if($sortById){
             $actions = array();
-            foreach($this->getReqJson($res) as $action){
+            foreach($this->getRespJson($res) as $action){
                 $actions[$action['id']] = $action;
             }
             return $actions;
         }
 
-        return $this->getReqJson($res);
+        return $this->getRespJson($res);
     }
 
     public function createAction($entity, $entityId, $description, $type = 'note'){
@@ -117,14 +117,14 @@ class Client
 
         $res = $this->guzzle->post( "$entity/$entityId/Actions", array_merge(['body' => json_encode($actionData)], $this->defaultRequest) );
 
-        return $this->getReqJson($res);
+        return $this->getRespJson($res);
     }
 
 
     public function getEntityTags($entity, $Id){
         $res = $this->guzzle->get("$entity/$Id/tags", $this->defaultRequest);
 
-        return $this->getReqJson($res);
+        return $this->getRespJson($res);
     }
 
     public function createTags($entity, $Id, $tagList){
@@ -134,12 +134,12 @@ class Client
         }
 
         $res = $this->guzzle->post("$entity/$Id/tags", array_merge(['body' => json_encode($hashedTags)], $this->defaultRequest) );
-        return $this->getReqJson($res);
+        return $this->getRespJson($res);
     }
 
     public function getEntity($entity, $entityId){
         $res = $this->guzzle->get( "$entity/$entityId.json", $this->defaultRequest);
-        return $this->getReqJson($res);
+        return $this->getRespJson($res);
     }
 
     /**
@@ -341,7 +341,7 @@ class Client
         }
         $query = http_build_query($query);
         $res = $this->guzzle->get("$entity?$query", $this->defaultRequest);
-        $contacts = $this->getReqJson($res);
+        $contacts = $this->getRespJson($res);
         if (count($contacts) == 500 ) {
             return null; // something must have gone wrong.
         }
@@ -397,7 +397,7 @@ class Client
             'dupeCheck' => 0,
         );
         $res = $this->guzzle->put("$entity/$id.json", array_merge(['body' => json_encode($config)], $this->defaultRequest));
-        return $this->getReqJson($res);
+        return $this->getRespJson($res);
     }
 
     public function getAllDropdowns($byId = true){
@@ -406,18 +406,18 @@ class Client
         // return them with the dropdown ID as key in the array
         if($byId){
             $dropdowns = array();
-            foreach($this->getReqJson($res) as $dropdown){
+            foreach($this->getRespJson($res) as $dropdown){
                 $dropdowns[$dropdown['id']] = $dropdown;
             }
             return $dropdowns;
         }
 
-        return $this->getReqJson($res);
+        return $this->getRespJson($res);
     }
 
     public function getDropdown($fieldId){
         $res = $this->guzzle->get("dropdowns/$fieldId.json", $this->defaultRequest);
-        return $this->getReqJson($res);
+        return $this->getRespJson($res);
     }
 
     public function getEmailFields($entity){
@@ -481,7 +481,7 @@ class Client
             $dropdowns = $this->getAllDropdowns();
         }
 
-        foreach ($this->getReqJson($res) as $field) {
+        foreach ($this->getRespJson($res) as $field) {
             $data[$field['fieldName']] = $field;
             if($withDropdownOptions && $field['type'] == 'dropdown' && isset($dropdowns[$field['linkType']])){
                 $data[$field['fieldName']]['dropdownInfo'] = $dropdowns[$field['linkType']];
@@ -551,7 +551,8 @@ class Client
         return ($var==="0"||$var);
     }
 
-    public function getReqJson($response){
+    // Return an arary of the responses json in the body
+    public function getRespJson($response){
         return json_decode($response->getBody(), true);
     }
 }
