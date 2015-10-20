@@ -8,6 +8,9 @@ class Client
 {
     private $guzzle;
     private $purify;
+    private $auth; // array
+    private $defaultHeaders; // array
+    private $defaultRequest; // array
 
     public function __construct($base_url, $apiUser, $apiKey, $purify = true)
     {
@@ -16,11 +19,11 @@ class Client
         // just a guzzle config
         $config = array(
             'base_url' => $base_url,
-            'defaults' => [
-                'headers' => ['Content-Type' => 'application/json'],
-                'auth' => [$apiUser, $apiKey],
-            ],
         );
+        $this->auth = [$apiUser, $apiKey];
+        $this->defaultHeaders = ['Content-Type' => 'application/json'];
+        // @todo make auth, defaultHeadres, defaultRequest set with get/setAuth so its extendable.
+        $this->defaultRequest = array_merge($this->auth, $this->defaultHeaders);
         $this->guzzle = new GuzzleClient($config);
     }
 
@@ -43,7 +46,7 @@ class Client
             if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
 
             // post it to x2engine
-            $res = $this->guzzle->put( 'Contacts/' . $updateId . '.json' , ['body' => json_encode($fieldInfo['verifiedFields'])] );
+            $res = $this->guzzle->put( 'Contacts/' . $updateId . '.json' , array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
         } else {
             // create contact
 
@@ -56,7 +59,7 @@ class Client
             }
 
             // post it to x2engine
-            $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($fieldInfo['verifiedFields'])] );
+            $res = $this->guzzle->post( 'Contacts', array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
         }
 
         $contact = $res->json();
