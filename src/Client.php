@@ -8,9 +8,6 @@ class Client
 {
     private $guzzle;
     private $purify;
-    private $auth; // array
-    private $defaultHeaders; // array
-    private $defaultRequest; // array
 
     /**
      * Client constructor.
@@ -25,12 +22,12 @@ class Client
 
         // just a guzzle config
         $config = array(
-            'base_uri' => $base_url,
+            'base_url' => $base_url,
+            'defaults' => [
+                'headers' => ['Content-Type' => 'application/json'],
+                'auth' => [$apiUser, $apiKey],
+            ],
         );
-        $this->auth = ['auth' => [$apiUser, $apiKey]];
-        $this->defaultHeaders = ['headers' => ['Content-Type' => 'application/json']];
-        // @todo make auth, defaultHeadres, defaultRequest set with get/setAuth so its extendable.
-        $this->defaultRequest = array_merge($this->auth, $this->defaultHeaders);
         $this->guzzle = new GuzzleClient($config);
     }
 
@@ -63,7 +60,7 @@ class Client
             if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
 
             // post it to x2engine
-            $res = $this->guzzle->put( 'Contacts/' . $updateId . '.json' , array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
+            $res = $this->guzzle->put( 'Contacts/' . $updateId . '.json' , ['body' => json_encode($fieldInfo['verifiedFields'])] );
         } else {
             // create contact
 
@@ -76,10 +73,10 @@ class Client
             }
 
             // post it to x2engine
-            $res = $this->guzzle->post( 'Contacts', array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
+            $res = $this->guzzle->post( 'Contacts', ['body' => json_encode($fieldInfo['verifiedFields'])] );
         }
 
-        $contact = $this->getRespJson($res);
+        $contact = $res->json();
 
         if ( isset($contact['id']) ){
             return array('contact' => $contact, 'ignoredFields' => $fieldInfo['ignoredFields']);
@@ -132,18 +129,18 @@ class Client
      * @return array
      */
     public function getEntityActions($entity, $Id, $sortById = true){
-        $res = $this->guzzle->get("$entity/$Id/Actions", $this->defaultRequest);
+        $res = $this->guzzle->get("$entity/$Id/Actions");
 
         // return them with the action ID as key in the array
         if($sortById){
             $actions = array();
-            foreach($this->getRespJson($res) as $action){
+            foreach($res->json() as $action){
                 $actions[$action['id']] = $action;
             }
             return $actions;
         }
 
-        return $this->getRespJson($res);
+        return $res->json();
     }
 
     /**
@@ -165,9 +162,9 @@ class Client
             "createDate" => time(),
         );
 
-        $res = $this->guzzle->post( "$entity/$entityId/Actions", array_merge(['body' => json_encode($actionData)], $this->defaultRequest) );
+        $res = $this->guzzle->post( "$entity/$entityId/Actions", ['body' => json_encode($actionData)] );
 
-        return $this->getRespJson($res);
+        return $res->json();
     }
 
     /**
@@ -178,9 +175,9 @@ class Client
      * @return mixed|JSON
      */
     public function getEntityTags($entity, $Id){
-        $res = $this->guzzle->get("$entity/$Id/tags", $this->defaultRequest);
+        $res = $this->guzzle->get("$entity/$Id/tags");
 
-        return $this->getRespJson($res);
+        return $res->json();
     }
 
     /**
@@ -197,8 +194,8 @@ class Client
             $hashedTags[] = '#'.ltrim(trim($tag), '#'); // Auto-prepend "#" if missing;
         }
 
-        $res = $this->guzzle->post("$entity/$Id/tags", array_merge(['body' => json_encode($hashedTags)], $this->defaultRequest) );
-        return $this->getRespJson($res);
+        $res = $this->guzzle->post("$entity/$Id/tags", ['body' => json_encode($hashedTags)] );
+        return $res->json();
     }
 
     /**
@@ -207,8 +204,8 @@ class Client
      * @return mixed
      */
     public function getEntity($entity, $entityId){
-        $res = $this->guzzle->get( "$entity/$entityId.json", $this->defaultRequest);
-        return $this->getRespJson($res);
+        $res = $this->guzzle->get( "$entity/$entityId.json" );
+        return $res->json();
     }
 
     /**
@@ -346,7 +343,7 @@ class Client
                 foreach($contacts as $fname => $clists){
                     foreach($clists as $key => $contact){
                         if( isset($dedup[$contact['id']]) ){
-                            unset($contacts[$fname][$key]);
+                           unset($contacts[$fname][$key]);
                         }
                         $dedup[$contact['id']] = 1;
                     }
@@ -417,8 +414,8 @@ class Client
             $query['visibility'] = $visibility;
         }
         $query = http_build_query($query);
-        $res = $this->guzzle->get("$entity?$query", $this->defaultRequest);
-        $contacts = $this->getRespJson($res);
+        $res = $this->guzzle->get("$entity?$query");
+        $contacts = $res->json();
         if (count($contacts) == 500 ) {
             return null; // something must have gone wrong.
         }
@@ -478,8 +475,8 @@ class Client
         $config = array(
             'dupeCheck' => 0,
         );
-        $res = $this->guzzle->put("$entity/$id.json", array_merge(['body' => json_encode($config)], $this->defaultRequest));
-        return $this->getRespJson($res);
+        $res = $this->guzzle->put("$entity/$id.json", ['body' => json_encode($config)]);
+        return $res->json();
     }
 
     /**
@@ -487,18 +484,18 @@ class Client
      * @return array
      */
     public function getAllDropdowns($byId = true){
-        $res = $this->guzzle->get('dropdowns', $this->defaultRequest, $this->defaultRequest);
+        $res = $this->guzzle->get('dropdowns');
 
         // return them with the dropdown ID as key in the array
         if($byId){
             $dropdowns = array();
-            foreach($this->getRespJson($res) as $dropdown){
+            foreach($res->json() as $dropdown){
                 $dropdowns[$dropdown['id']] = $dropdown;
             }
             return $dropdowns;
         }
 
-        return $this->getRespJson($res);
+        return $res->json();
     }
 
     /**
@@ -506,8 +503,8 @@ class Client
      * @return mixed
      */
     public function getDropdown($fieldId){
-        $res = $this->guzzle->get("dropdowns/$fieldId.json", $this->defaultRequest);
-        return $this->getRespJson($res);
+        $res = $this->guzzle->get("dropdowns/$fieldId.json");
+        return $res->json();
     }
 
     /**
@@ -573,14 +570,14 @@ class Client
      * @return array
      */
     public function getFields($entity, $withDropdownOptions = false){
-        $res = $this->guzzle->get("$entity/fields", $this->defaultRequest);
+        $res = $this->guzzle->get("$entity/fields");
 
         $data = array();
         if($withDropdownOptions){
             $dropdowns = $this->getAllDropdowns();
         }
 
-        foreach ($this->getRespJson($res) as $field) {
+        foreach ($res->json() as $field) {
             $data[$field['fieldName']] = $field;
             if($withDropdownOptions && $field['type'] == 'dropdown' && isset($dropdowns[$field['linkType']])){
                 $data[$field['fieldName']]['dropdownInfo'] = $dropdowns[$field['linkType']];
@@ -654,10 +651,5 @@ class Client
      */
     public function notEmpty($var) {
         return ($var==="0"||$var);
-    }
-
-    // Return an arary of the responses json in the body
-    public function getRespJson($response){
-        return json_decode($response->getBody(), true);
     }
 }
