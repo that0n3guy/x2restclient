@@ -103,6 +103,28 @@ class Client
     }
 
     /**
+     * Create a QR. Return the QR ID
+     *
+     * @param $submittedFields
+     * @param null $mapper
+     * @param bool|true $verfityDropdowns
+     * @param null $updateId
+     * @return array
+     * @throws Exception
+     */
+    public function createQR( $submittedFields){
+        $res = $this->guzzle->post( 'Quoterequest', array_merge(['body' => json_encode($submittedFields)], $this->defaultRequest) );
+
+        $QR = $this->getRespJson($res);
+
+        if ( isset($QR['id']) ){
+            return $QR;
+        }
+
+        throw new Exception("No Quote Request ID returned.  Something must have gone wrong.");
+    }
+
+    /**
      * Validate that the fields passed include all required fields. Retrieves required fields by the entity type.
      *
      * @param $entity
