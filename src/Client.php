@@ -8,35 +8,25 @@ class Client
 {
     private $guzzle;
     private $purify;
-    private $auth; // array
-    private $defaultHeaders; // array
-    private $defaultRequest; // array
 
-    /**
-     * Client constructor.
-     * @param $base_url
-     * @param $apiUser
-     * @param $apiKey
-     * @param bool|true $purify
-     */
     public function __construct($base_url, $apiUser, $apiKey, $purify = true)
     {
         $this->setPurify($purify);
 
         // just a guzzle config
         $config = array(
-            'base_uri' => $base_url,
+            'base_url' => $base_url,
+            'defaults' => [
+                'headers' => ['Content-Type' => 'application/json'],
+                'auth' => [$apiUser, $apiKey],
+                'verify' => false,
+
+            ],
         );
-        $this->auth = ['auth' => [$apiUser, $apiKey]];
-        $this->defaultHeaders = ['headers' => ['Content-Type' => 'application/json']];
-        // @todo make auth, defaultHeadres, defaultRequest set with get/setAuth so its extendable.
-        $this->defaultRequest = array_merge($this->auth, $this->defaultHeaders);
         $this->guzzle = new GuzzleClient($config);
     }
-
     /**
-     * Create a contact. Return the contact with infomration on ignored fields, or return information on what information
-     * is missing.
+     * Create a QR. Return the QR ID
      *
      * @param $submittedFields
      * @param null $mapper
@@ -45,6 +35,39 @@ class Client
      * @return array
      * @throws Exception
      */
+    public function createRelation($URI, $relation) {
+        $res = $this->guzzle->post( $URI, array('body' => json_encode($relation)));
+
+        $rel = $res->json();
+
+        if ( isset($rel['id']) ){
+            return $rel;
+        }
+
+        throw new Exception("Relation Failed. Something must have gone wrong.");
+    }
+    /**
+     * Create a Model. Return the Model ID
+     *
+     * @param $model, $submittedFields
+     * @param null $mapper
+     * @param bool|true $verfityDropdowns
+     * @param null $updateId
+     * @return array
+     * @throws Exception
+     */
+    public function createModel($model, $submittedFields){
+        $res = $this->guzzle->post( $model, array('body' => json_encode($submittedFields)));
+
+        $modelResp = $res->json();
+
+        if ( isset($modelResp['id']) ){
+            return $modelResp;
+        }
+
+        throw new Exception("No $model ID returned.  Something must have gone wrong.");
+    }
+
     public function createContact( $submittedFields, $mapper = null, $verfityDropdowns = true, $updateId = null){
         /**
          * @todo tracking key handling
@@ -63,7 +86,8 @@ class Client
             if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
 
             // post it to x2engine
-            $res = $this->guzzle->put( 'Contacts/' . $updateId . '.json' , array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
+            $res = $this->guzzle->put( 'Contacts/' . $updateId . '.json' , ['body' => json_encode($fieldInfo['verifiedFields'])] );
+            $contact = $res->json();
         } else {
             // create contact
 
@@ -76,61 +100,16 @@ class Client
             }
 
             // post it to x2engine
-            $res = $this->guzzle->post( 'Contacts', array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
+            $contact = $this->createModel( 'Contacts', $fieldInfo['verifiedFields']);
         }
+        return array('contact' => $contact, 'ignoredFields' => $fieldInfo['ignoredFields']);
 
-        $contact = $this->getRespJson($res);
-
-        if ( isset($contact['id']) ){
-            return array('contact' => $contact, 'ignoredFields' => $fieldInfo['ignoredFields']);
-        }
-
-        throw new Exception("No contact ID returned.  Something must have gone wrong.");
     }
 
-    /**
-     * Update a Contact.
-     *
-     * @param $id
-     * @param $submittedFields
-     * @param null $mapper
-     * @param bool|true $verifyDropdowns
-     * @return array
-     * @throws Exception
-     */
     public function updateContact($id, $submittedFields, $mapper = null, $verifyDropdowns = true){
         return $this->createContact($submittedFields,$mapper,$verifyDropdowns,$id);
     }
 
-    /**
-     * Create a QR. Return the QR ID
-     *
-     * @param $submittedFields
-     * @param null $mapper
-     * @param bool|true $verfityDropdowns
-     * @param null $updateId
-     * @return array
-     * @throws Exception
-     */
-    public function createQR( $submittedFields){
-        $res = $this->guzzle->post( 'Quoterequest', array_merge(['body' => json_encode($submittedFields)], $this->defaultRequest) );
-
-        $QR = $this->getRespJson($res);
-
-        if ( isset($QR['id']) ){
-            return $QR;
-        }
-
-        throw new Exception("No Quote Request ID returned.  Something must have gone wrong.");
-    }
-
-    /**
-     * Validate that the fields passed include all required fields. Retrieves required fields by the entity type.
-     *
-     * @param $entity
-     * @param $fields
-     * @return array|null
-     */
     public function validateRequiredFields($entity, $fields){
         // verify we have all our needed "required" fields
         $requiredFields = $this->getRequiredFields($entity);
@@ -146,37 +125,21 @@ class Client
         return $missingRequired;
     }
 
-    /**
-     * Get any actions available via the entity type.
-     * @param $entity
-     * @param $Id
-     * @param bool|true $sortById
-     * @return array
-     */
     public function getEntityActions($entity, $Id, $sortById = true){
-        $res = $this->guzzle->get("$entity/$Id/Actions", $this->defaultRequest);
+        $res = $this->guzzle->get("$entity/$Id/Actions");
 
         // return them with the action ID as key in the array
         if($sortById){
             $actions = array();
-            foreach($this->getRespJson($res) as $action){
+            foreach($res->json() as $action){
                 $actions[$action['id']] = $action;
             }
             return $actions;
         }
 
-        return $this->getRespJson($res);
+        return $res->json();
     }
 
-    /**
-     * Create an action for an entity.
-     *
-     * @param $entity
-     * @param $entityId
-     * @param $description
-     * @param string $type
-     * @return mixed
-     */
     public function createAction($entity, $entityId, $description, $type = 'note'){
         $actionData = array(
             'actionDescription' => $description,
@@ -187,50 +150,31 @@ class Client
             "createDate" => time(),
         );
 
-        $res = $this->guzzle->post( "$entity/$entityId/Actions", array_merge(['body' => json_encode($actionData)], $this->defaultRequest) );
+        $res = $this->guzzle->post( "$entity/$entityId/Actions", ['body' => json_encode($actionData)] );
 
-        return $this->getRespJson($res);
+        return $res->json();
     }
 
-    /**
-     * Get the tags for an entity (contact, etc) based on it's ID
-     *
-     * @param $entity
-     * @param $Id
-     * @return mixed|JSON
-     */
+
     public function getEntityTags($entity, $Id){
-        $res = $this->guzzle->get("$entity/$Id/tags", $this->defaultRequest);
+        $res = $this->guzzle->get("$entity/$Id/tags");
 
-        return $this->getRespJson($res);
+        return $res->json();
     }
 
-    /**
-     * Create a tag for an entity, based on it's ID
-     *
-     * @param $entity
-     * @param $Id
-     * @param $tagList
-     * @return mixed
-     */
     public function createTags($entity, $Id, $tagList){
         $hashedTags = array();
         foreach ($tagList as $tag) {
             $hashedTags[] = '#'.ltrim(trim($tag), '#'); // Auto-prepend "#" if missing;
         }
 
-        $res = $this->guzzle->post("$entity/$Id/tags", array_merge(['body' => json_encode($hashedTags)], $this->defaultRequest) );
-        return $this->getRespJson($res);
+        $res = $this->guzzle->post("$entity/$Id/tags", ['body' => json_encode($hashedTags)] );
+        return $res->json();
     }
 
-    /**
-     * @param $entity
-     * @param $entityId
-     * @return mixed
-     */
     public function getEntity($entity, $entityId){
-        $res = $this->guzzle->get( "$entity/$entityId.json", $this->defaultRequest);
-        return $this->getRespJson($res);
+        $res = $this->guzzle->get( "$entity/$entityId.json" );
+        return $res->json();
     }
 
     /**
@@ -275,8 +219,6 @@ class Client
     }
 
     /**
-     * Verifies a field. Can check if the field is a correct dropdown value, and if it's a valid field name.
-     *
      * @param $verifiedFields
      * @param $ignoredFields
      * @param $fieldName
@@ -397,14 +339,10 @@ class Client
         }
     }
 
-    /**
-     * Finds a contact in X2 using their name.  Should be "FirstName LastName"
-     * @param $names
-     * @return mixed|null
-     * @throws Exception
-     */
     public function getContactsByName($names){
+        $nameField = 'name'; // default x2engine name field
         if(is_array($names)){
+            $contacts = array();
             return $this->getEntityByField('Contacts', $names, 'name');
         } else {
             throw new Exception('$names should be an array');
@@ -412,10 +350,8 @@ class Client
     }
 
     /**
-     * Gets an entity (contact, etc) by user specified field type.
-     *
-     * @param string $entity string, the type of record you are retrieving
-     * @param array|string $searchInfo, the values you are searching with
+     * @param string $entity string
+     * @param array|string $searchInfo
      * @param string $fieldName
      * @param int $visibility
      * @return mixed|null
@@ -439,8 +375,8 @@ class Client
             $query['visibility'] = $visibility;
         }
         $query = http_build_query($query);
-        $res = $this->guzzle->get("$entity?$query", $this->defaultRequest);
-        $contacts = $this->getRespJson($res);
+        $res = $this->guzzle->get("$entity?$query");
+        $contacts = $res->json();
         if (count($contacts) == 500 ) {
             return null; // something must have gone wrong.
         }
@@ -491,51 +427,34 @@ class Client
         }
     }
 
-    /**
-     * @param $entity
-     * @param $id
-     * @return mixed
-     */
     public function resetDupeCheck($entity, $id){
         $config = array(
             'dupeCheck' => 0,
         );
-        $res = $this->guzzle->put("$entity/$id.json", array_merge(['body' => json_encode($config)], $this->defaultRequest));
-        return $this->getRespJson($res);
+        $res = $this->guzzle->put("$entity/$id.json", ['body' => json_encode($config)]);
+        return $res->json();
     }
 
-    /**
-     * @param bool|true $byId
-     * @return array
-     */
     public function getAllDropdowns($byId = true){
-        $res = $this->guzzle->get('dropdowns', $this->defaultRequest, $this->defaultRequest);
+        $res = $this->guzzle->get('dropdowns');
 
         // return them with the dropdown ID as key in the array
         if($byId){
             $dropdowns = array();
-            foreach($this->getRespJson($res) as $dropdown){
+            foreach($res->json() as $dropdown){
                 $dropdowns[$dropdown['id']] = $dropdown;
             }
             return $dropdowns;
         }
 
-        return $this->getRespJson($res);
+        return $res->json();
     }
 
-    /**
-     * @param $fieldId
-     * @return mixed
-     */
     public function getDropdown($fieldId){
-        $res = $this->guzzle->get("dropdowns/$fieldId.json", $this->defaultRequest);
-        return $this->getRespJson($res);
+        $res = $this->guzzle->get("dropdowns/$fieldId.json");
+        return $res->json();
     }
 
-    /**
-     * @param $entity
-     * @return array
-     */
     public function getEmailFields($entity){
         $fields = $this->getFields($entity);
         $emailFields = array();
@@ -556,10 +475,6 @@ class Client
         return $emailFields;
     }
 
-    /**
-     * @param $entity
-     * @return array
-     */
     public function getRequiredFields($entity){
         $fields = $this->getFields($entity);
         $emailFields = array();
@@ -572,7 +487,6 @@ class Client
 
         return $emailFields;
     }
-
     /**
      * @param $entity, type of entity (Contacts, Accounts, etc...)
      * @param $name, name of the field
@@ -595,14 +509,14 @@ class Client
      * @return array
      */
     public function getFields($entity, $withDropdownOptions = false){
-        $res = $this->guzzle->get("$entity/fields", $this->defaultRequest);
+        $res = $this->guzzle->get("$entity/fields");
 
         $data = array();
         if($withDropdownOptions){
             $dropdowns = $this->getAllDropdowns();
         }
 
-        foreach ($this->getRespJson($res) as $field) {
+        foreach ($res->json() as $field) {
             $data[$field['fieldName']] = $field;
             if($withDropdownOptions && $field['type'] == 'dropdown' && isset($dropdowns[$field['linkType']])){
                 $data[$field['fieldName']]['dropdownInfo'] = $dropdowns[$field['linkType']];
@@ -620,15 +534,9 @@ class Client
         $this->purify = $value;
     }
 
-    /**
-     * return the value for whether or not attributes should be purified before sending to X2
-     *
-     * @return mixed
-     */
     public function getPurify(){
         return $this->purify;
     }
-
     /**
      * The config is from x2engines getPurifier();
      * The code is fromt the second comment here: https://laracasts.com/discuss/channels/tips/htmlpurifier-in-laravel-5
@@ -676,10 +584,5 @@ class Client
      */
     public function notEmpty($var) {
         return ($var==="0"||$var);
-    }
-
-    // Return an arary of the responses json in the body
-    public function getRespJson($response){
-        return json_decode($response->getBody(), true);
     }
 }
