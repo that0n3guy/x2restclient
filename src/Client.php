@@ -35,7 +35,7 @@ class Client
     }
 
     public function createRelation($URI, $relation) {
-                $res = $this->guzzle->post( $URI, array('body' => json_encode($relation)));
+                $res = $this->guzzle->post( $URI, array('body' => json_encode($relation), $this->defaultRequest));
 
                 $rel = $res->json();
 
@@ -56,7 +56,7 @@ class Client
      * @throws Exception
      */
     public function createModel($model, $submittedFields){
-            $res = $this->guzzle->post( $model, array('body' => json_encode($submittedFields)));
+            $res = $this->guzzle->post( $model, array('body' => json_encode($submittedFields), $this->defaultRequest));
 
             $modelResp = $res->json();
              if ( isset($modelResp['id']) ){
