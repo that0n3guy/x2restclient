@@ -34,6 +34,37 @@ class Client
         $this->guzzle = new GuzzleClient($config);
     }
 
+    public function createRelation($URI, $relation) {
+                $res = $this->guzzle->post( $URI, array('body' => json_encode($relation)));
+
+                $rel = $res->json();
+
+                if ( isset($rel['id']) ){
+                        return $rel;
+         }
+
+         throw new Exception("Relation Failed. Something must have gone wrong.");
+     }
+    /**
+     * Create a Model. Return the Model ID
+     *
+     * @param $model, $submittedFields
+     * @param null $mapper
+     * @param bool|true $verfityDropdowns
+     * @param null $updateId
+     * @return array
+     * @throws Exception
+     */
+    public function createModel($model, $submittedFields){
+            $res = $this->guzzle->post( $model, array('body' => json_encode($submittedFields)));
+
+            $modelResp = $res->json();
+             if ( isset($modelResp['id']) ){
+                    return $modelResp;
+             }
+
+         throw new Exception("No $model ID returned.  Something must have gone wrong.");
+     }
     /**
      * Create a contact. Return the contact with infomration on ignored fields, or return information on what information
      * is missing.
