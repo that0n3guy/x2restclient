@@ -46,15 +46,15 @@ class Client
          throw new Exception("Relation Failed. Something must have gone wrong.");
      }
     /**
-+     * Create a Model. Return the Model ID
-+     *
-+     * @param $model, $submittedFields
-+     * @param null $mapper
-+     * @param bool|true $verfityDropdowns
-+     * @param null $updateId
-+     * @return array
-+     * @throws Exception
-+     */
+     * Create a Model. Return the Model ID
+     *
+     * @param $model, $submittedFields
+     * @param null $mapper
+     * @param bool|true $verfityDropdowns
+     * @param null $updateId
+     * @return array
+     * @throws Exception
+     */
     public function createModel($model, $submittedFields){
             $res = $this->guzzle->post( $model, array('body' => json_encode($submittedFields)));
 
