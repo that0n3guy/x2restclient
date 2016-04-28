@@ -56,7 +56,7 @@ class Client
      * @throws Exception
      */
     public function createModel($model, $submittedFields){
-            $res = $this->guzzle->post( $model, array('body' => json_encode($submittedFields), $this->defaultRequest));
+            $res = $this->guzzle->post( $model, array_merge(array('body' => json_encode($submittedFields), $this->defaultRequest)) );
 
             $modelResp = $res->json();
              if ( isset($modelResp['id']) ){
