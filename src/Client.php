@@ -35,16 +35,16 @@ class Client
     }
 
     public function createRelation($URI, $relation) {
-                $res = $this->guzzle->post( $URI, array('body' => json_encode($relation), $this->defaultRequest));
+        $res = $this->guzzle->post( $URI,  array_merge(['body' => json_encode($relation)], $this->defaultRequest) );
 
-                $rel = $res->json();
+        $rel = $this->getRespJson($res);
 
-                if ( isset($rel['id']) ){
-                        return $rel;
-         }
+        if ( isset($rel['id']) ){
+            return $rel;
+        }
 
-         throw new Exception("Relation Failed. Something must have gone wrong.");
-     }
+        throw new Exception("Relation Failed. Something must have gone wrong.");
+    }
     /**
      * Create a Model. Return the Model ID
      *
@@ -56,15 +56,16 @@ class Client
      * @throws Exception
      */
     public function createModel($model, $submittedFields){
-            $res = $this->guzzle->post( $model, array_merge(array('body' => json_encode($submittedFields), $this->defaultRequest)) );
+        $res = $this->guzzle->post( $model,     array_merge(['body' => json_encode($submittedFields)], $this->defaultRequest) );
 
-            $modelResp = $res->json();
-             if ( isset($modelResp['id']) ){
-                    return $modelResp;
-             }
+        $modelResp = $this->getRespJson($res);
 
-         throw new Exception("No $model ID returned.  Something must have gone wrong.");
-     }
+        if ( isset($modelResp['id']) ){
+            return $modelResp;
+        }
+
+        throw new Exception("No $model ID returned.  Something must have gone wrong.");
+    }
     /**
      * Create a contact. Return the contact with infomration on ignored fields, or return information on what information
      * is missing.
