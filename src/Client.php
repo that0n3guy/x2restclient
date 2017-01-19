@@ -71,6 +71,56 @@ class Client
      * is missing.
      *
      * @param $submittedFields
+     * @param $entity
+     * @param null $mapper
+     * @param bool|true $verfityDropdowns
+     * @param null $updateId
+     * @return array
+     * @throws Exception
+     */
+    public function createEntity( $submittedFields, $entity, $mapper = null, $verfityDropdowns = true, $updateId = null){
+        $fieldInfo = $this->verifyAttributes($entity, $submittedFields, $mapper, $verfityDropdowns);
+
+        if($updateId){
+            // update contact
+            // set dupecheck to zero
+            if(!isset($fieldInfo['verifiedFields']['dupeCheck']))
+                $fieldInfo['verifiedFields']['dupeCheck'] = 0;
+
+            //Set visibility
+            if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
+
+            // post it to x2engine
+            $res = $this->guzzle->put( $entity."/" . $updateId . '.json' , array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
+        } else {
+            // create contact
+
+            //Set visibility
+            if (empty ($fieldInfo['verifiedFields']['visibility'])) $fieldInfo['verifiedFields']['visibility'] = 1;
+
+            // verify we have all our needed "required" fields... Not needed if updating (probably)
+            if(isset($fieldInfo['missingRequired']) && !empty($fieldInfo['missingRequired'])){
+                return array('missingRequired' => $fieldInfo['missingRequired']);
+            }
+
+            // post it to x2engine
+            $res = $this->guzzle->post( $entity, array_merge(['body' => json_encode($fieldInfo['verifiedFields'])], $this->defaultRequest) );
+        }
+
+        $theEntity = $this->getRespJson($res);
+
+        if ( isset($theEntity['id']) ){
+            return array($entity => $theEntity, 'ignoredFields' => $fieldInfo['ignoredFields']);
+        }
+
+        throw new Exception("No Entity ID returned.  Something must have gone wrong.");
+    }
+
+    /**
+     * Create a contact. Return the contact with infomration on ignored fields, or return information on what information
+     * is missing.
+     *
+     * @param $submittedFields
      * @param null $mapper
      * @param bool|true $verfityDropdowns
      * @param null $updateId
@@ -134,6 +184,20 @@ class Client
         return $this->createContact($submittedFields,$mapper,$verifyDropdowns,$id);
     }
 
+    /**
+     * Update a Contact.
+     *
+     * @param $id
+     * @param $submittedFields
+     * @param $entity
+     * @param null $mapper
+     * @param bool|true $verifyDropdowns
+     * @return array
+     * @throws Exception
+     */
+    public function updateEntity($id, $submittedFields, $entity, $mapper = null, $verifyDropdowns = true){
+        return $this->createEntity($submittedFields, $entity,$mapper,$verifyDropdowns,$id);
+    }
     /**
      * Create a QR. Return the QR ID
      *
