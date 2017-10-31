@@ -34,6 +34,13 @@ class Client
         $this->guzzle = new GuzzleClient($config);
     }
 
+    /**
+     * Client constructor.
+     * @param $URI
+     * @param $relation
+     *
+     * @return int
+     */
     public function createRelation($URI, $relation) {
         $res = $this->guzzle->post( $URI,  array_merge(['body' => json_encode($relation)], $this->defaultRequest) );
 
@@ -774,6 +781,11 @@ class Client
         return ($var==="0"||$var);
     }
 
+    /**
+     *
+     * @param $var
+     * @return bool
+     */
     // Return an arary of the responses json in the body
     public function getRespJson($response){
         return json_decode($response->getBody(), true);
