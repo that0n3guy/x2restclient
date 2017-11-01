@@ -1,5 +1,6 @@
-Your projects composer file will probably need the following 2 lines for this to install correctly:
+<h1> X2 Rest Client</h1>
 
+Add the following lines to your composer file:
 ```
     {
       "minimum-stability": "dev",
