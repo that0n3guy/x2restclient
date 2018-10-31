@@ -11,6 +11,7 @@ Add the following lines to your composer file:
       }
     }
 ```
+Make sure you run composer install. Watch out for update, as it will update all other composer stuff also.
 
 Here is a basic example of how to create a contact:
 ```
